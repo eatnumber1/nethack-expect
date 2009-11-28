@@ -1,0 +1,69 @@
+#!/usr/local/bin/expect -f
+# Written by Russell Harmon
+#
+# This is a script which will automate the process of logging in to nethack.
+# It will either prompt for your username, password and binge at every run
+# Or you can store that information in a file named ~/.nethackpasswd.
+# The format of the nethackpasswd is as follows:
+# 	user:pass:binge
+# All fields are required.
+# If you use a nethackpasswd file, it would be in your best interest run chmod 600 
+
+set nethackpasswd "~/.nethackpasswd"
+#exp_internal 1 # Enable debugging.
+
+# Do not edit below this line
+
+if {[file exist "$nethackpasswd"]} {
+	set fp [open "$nethackpasswd" r]
+	set data [read $fp]
+	close $fp
+	set data [split $data "\n"]
+	set data [lindex $data 0]
+	set data [split $data ":"]
+	set user [lindex $data 0]
+	set password [lindex $data 1]
+	set binge [lindex $data 2]
+} else {
+	set default_binge "a"
+	send_user "Username: "
+	expect_user -timeout -1 -re "(.*)\n"
+	set user $expect_out(1,string)
+
+	stty -echo
+	send_user "Password: "
+	expect_user -timeout -1 -re "(.*)\n"
+	set password $expect_out(1,string)
+	send_user "\n"
+	stty echo
+
+	send_user "Select binge: \[$default_binge\] "
+	expect_user -timeout -1 -re "(.*)\n"
+	set binge $expect_out(1,string)
+	if {$binge == ""} {
+		set binge $default_binge
+	}
+}
+
+spawn -noecho /usr/local/bin/nethack
+expect "Who are you? $"
+send -- "$user\r"
+expect "Password: "
+send -- "$password"
+send -- "\r"
+expect "Choose an Action"
+expect "(end) "
+send -- "a"
+expect "Select a Binge"
+expect "(end) "
+send -- "$binge"
+expect {
+	"There is already a game running as your user" {
+		wait
+		exit
+	}
+	"Shall I pick a character's race, role, gender and alignment for you? \\\[ynq\\\]" {}
+	"Restoring save file..." {}
+}
+interact
+wait

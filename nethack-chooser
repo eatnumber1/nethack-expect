@@ -1,0 +1,114 @@
+#!/usr/local/bin/expect -f
+set nethackpasswd "~/.nethackpasswd"
+exp_internal 1
+#set timeout 3
+set timeout -1
+set force_conservative 0
+
+# Do not edit below this line
+
+if {$force_conservative} {
+	set send_slow {1 .1}
+	proc send {ignore arg} {
+		sleep .1
+		exp_send -s -- $arg
+	}
+}
+
+proc quit_nethack {} {
+	send -- "#"
+	expect {
+		"Extended Command:" {
+			send -- "q"
+		}
+		"#" {
+			send -- "q\r"
+		}
+	}
+	expect "Really quit? \\\[yn\\\] (n) "
+	send -- "y"
+	expect {
+		"(end) " {
+			send -- " "
+		}
+		"Do you want your possessions identified? \\\[ynq\\\] (n) " {}
+	}
+	send -- "q"
+	expect eof
+	wait
+}
+
+proc nh_expect {prompt} {
+	expect "$prompt"
+	expect "(end) "
+}
+
+set retry "n"
+while {$retry == "n"} {
+	spawn -noecho nethack
+	expect {
+		"Restoring save file..." {
+			interact
+			wait
+			exit
+		}
+		"Shall I pick a character's race, role, gender and alignment for you? \\\[ynq\\\] " {}
+	}
+	send -- "n"
+
+	while {1} {
+		expect {
+			"Choosing " {
+				expect {
+					"Character's Role" {
+						send -- "w"
+					}
+					"Race" {
+						send -- "h"
+					}
+					"Gender" {
+						send -- "f"
+					}
+					"Alignment" {
+						send -- "c"
+					}
+				}
+			}
+			-gl "--More--" {
+				send -- " "
+				break
+			}
+		}
+	}
+
+	expect {
+		-gl "--More--" {
+			send -- " "
+		}
+		"Hello *, welcome to NetHack!" {}
+	}
+	send -- "i"
+	expect "(end) "
+	send_user -- "\nDo you want this character? \[ynq\] "
+	stty -echo
+	stty -cooked
+	expect_user -timeout -1 -re "(\[ynq\])"
+	stty cooked
+	stty echo
+	send_user -- "\n"
+	set retry $expect_out(1,string)
+	send -- " "
+	if {$retry == "q"} {
+		quit_nethack
+		exit
+	} elseif {$retry == "n"} {
+		quit_nethack
+	}
+}
+send -- "S"
+expect "Really save? \\\[yn\\\] (n) "
+send -- "y"
+expect eof
+send_user "Your game is saved. Load nethack to continue it.\n"
+
+# vim:syntax=expect
